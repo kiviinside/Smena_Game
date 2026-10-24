@@ -209,7 +209,29 @@ screen choice(items):
 
     vbox:
         for i in items:
-            textbutton i.caption action i.action
+            textbutton i.caption action [SetVariable("timed_seconds", 0), i.action]
+
+    # Таймер выбора (включается командой $ timed(секунды) перед menu).
+    # Когда время вышло, выбирается ПОСЛЕДНИЙ пункт меню.
+    if timed_seconds > 0:
+        timer timed_seconds action [SetVariable("timed_seconds", 0), items[-1].action]
+
+        vbox:
+            xalign 0.5
+            ypos 40
+            spacing 10
+
+            text "Решайте быстро!":
+                xalign 0.5
+                size 36
+                color "#ffffff"
+                outlines [(2, "#000000", 0, 0)]
+
+            bar:
+                xalign 0.5
+                xsize 760
+                ysize 18
+                value AnimatedValue(0.0, 1.0, timed_seconds, 1.0)
 
 
 style choice_vbox is vbox
