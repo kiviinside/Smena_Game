@@ -6,7 +6,7 @@ server:
 
 spring:
   datasource:
-    url: ${DATABASE_URL}
+    url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
   flyway:
