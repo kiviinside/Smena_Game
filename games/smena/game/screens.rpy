@@ -216,22 +216,34 @@ screen choice(items):
     if timed_seconds > 0:
         timer timed_seconds action [SetVariable("timed_seconds", 0), items[-1].action]
 
-        vbox:
+        # Панель таймера в стиле игры: белая плашка с синей рамкой и синяя шкала,
+        # которая убывает до нуля. Когда время вышло, выбирается последний пункт.
+        frame:
+            background Frame("gui/mg/panel.png", 6, 6)
             xalign 0.5
             ypos 40
-            spacing 10
+            padding (36, 14, 36, 18)
 
-            text "Решайте быстро!":
+            vbox:
+                spacing 10
+                # сбрасываем позицию из choice_vbox (ypos 405), иначе панель съезжает вниз
                 xalign 0.5
-                size 36
-                color "#ffffff"
-                outlines [(2, "#000000", 0, 0)]
+                ypos 0
+                yanchor 0.0
 
-            bar:
-                xalign 0.5
-                xsize 760
-                ysize 18
-                value AnimatedValue(0.0, 1.0, timed_seconds, 1.0)
+                text "Решайте быстро!":
+                    xalign 0.5
+                    size 34
+                    bold True
+                    color "#003366"
+
+                bar:
+                    xalign 0.5
+                    xsize 700
+                    ysize 18
+                    left_bar Solid("#003366")
+                    right_bar Solid("#c9d3de")
+                    value AnimatedValue(0.0, 1.0, timed_seconds, 1.0)
 
 
 style choice_vbox is vbox
@@ -273,8 +285,8 @@ screen quick_menu():
             textbutton _("Пропуск") action Skip() alternate Skip(fast=True, confirm=True)
             textbutton _("Авто") action Preference("auto-forward", "toggle")
             textbutton _("Сохранить") action ShowMenu('save')
-            textbutton _("Б.Сохр") action QuickSave()
-            textbutton _("Б.Загр") action QuickLoad()
+            textbutton _("Быстрое сохранение") action QuickSave()
+            textbutton _("Быстрая загрузка") action QuickLoad()
             textbutton _("Опции") action ShowMenu('preferences')
 
 
@@ -340,6 +352,9 @@ screen navigation():
         elif not main_menu:
 
             textbutton _("Главное меню") action MainMenu()
+
+            textbutton _("Сменить игрока"):
+                action Show("confirm", message=_("Сменить игрока? Незавершённая глава не сохранится."), yes_action=Jump("api_switch_player"), no_action=Hide("confirm"))
 
         textbutton _("Об игре") action ShowMenu("about")
 
@@ -497,6 +512,9 @@ screen game_menu(title, scroll=None, yinitial=0.0, spacing=0):
                     transclude
 
     use navigation
+
+    if not main_menu:
+        use api_player_info
 
     textbutton _("Вернуться"):
         style "return_button"
@@ -701,15 +719,20 @@ screen file_slots(title):
                     textbutton _(">") action FilePageNext()
                     key "save_page_next" action FilePageNext()
 
-                if config.has_sync:
-                    if CurrentScreenName() == "save":
-                        textbutton _("Загрузить Sync"):
-                            action UploadSync()
-                            xalign 0.5
-                    else:
-                        textbutton _("Скачать Sync"):
-                            action DownloadSync()
-                            xalign 0.5
+                if renpy.emscripten:
+                    text _("Слоты хранятся только в этом браузере. Прогресс по главам сохраняется на сервере автоматически."):
+                        xalign 0.5
+                        textalign 0.5
+                        xmaximum 1300
+                        size 22
+                        color gui.idle_small_color
+                else:
+                    text _("Слоты хранятся только на этом компьютере. Прогресс по главам сохраняется на сервере автоматически."):
+                        xalign 0.5
+                        textalign 0.5
+                        xmaximum 1300
+                        size 22
+                        color gui.idle_small_color
 
 
 style page_label is gui_label

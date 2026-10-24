@@ -15,7 +15,7 @@ define api_base_url = ""
 define api_desktop_url = "http://localhost:8080"
 
 # Сколько секунд ждать ответ сервера.
-define api_timeout = 15.0
+define api_timeout = 30.0
 
 default api_nickname = ""
 default api_offline = False
@@ -23,6 +23,15 @@ default api_offline = False
 
 init python:
     import json
+
+    # Допустимые символы ника (латиница, кириллица, цифры, пробел и _ - .).
+    # Фильтр в renpy.input не даёт ввести лишнее. Длину (2–20) проверяет сервер.
+    API_NICK_ALLOWED = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+        "іїєґўІЇЄҐЎ"
+        "0123456789 _-."
+    )
 
     # Переменные хранилища (store), которые сервер держит в progress.state.
     # Имена ключей на сервере совпадают с именами переменных (snake_case).
@@ -173,6 +182,7 @@ init python:
             d = res["data"]
             res["progress"] = d["progress"] if isinstance(d.get("progress"), dict) else d
             res["nickname"] = d["nickname"] if isinstance(d.get("nickname"), str) and d["nickname"] else nickname
+            res["is_new"] = bool(d.get("isNew"))
         return res
 
     def api_put_progress():
@@ -184,7 +194,10 @@ screen api_busy():
     frame:
         align (0.5, 0.5)
         padding (40, 25)
-        text "Соединение с сервером…" size 32
+        vbox:
+            spacing 8
+            text "Соединение с сервером…" size 32 xalign 0.5
+            text "Первый вход может занять до [int(api_timeout)] секунд" size 24 xalign 0.5
 
 
 # ============================================
@@ -199,7 +212,7 @@ label api_login_flow:
     $ api_nickname = ""
 
 label api_ask_nickname:
-    $ api_input = renpy.input("Введите ваш никнейм:", length=20).strip()
+    $ api_input = renpy.input("Введите ваш никнейм:\n{size=-9}2–20 символов: буквы, цифры, пробел, _ - .\nРегистр не важен: Anna и anna — один профиль{/size}", allow=API_NICK_ALLOWED, length=20).strip()
     if api_input == "":
         "Никнейм не может быть пустым."
         jump api_ask_nickname
@@ -207,7 +220,17 @@ label api_ask_nickname:
 label api_try_login:
     $ api_res = api_login(api_input)
     if api_res["ok"]:
-        $ api_nickname = api_res["nickname"]
+        $ api_found = api_res["nickname"]
+        if api_res["is_new"]:
+            "Профиль «[api_found!q]» создан. Прогресс будет сохраняться на сервере."
+        else:
+            menu:
+                "Профиль «[api_found!q]» уже есть. Это вы?"
+                "Да, продолжить":
+                    pass
+                "Нет, ввести другой ник":
+                    jump api_ask_nickname
+        $ api_nickname = api_found
         $ api_apply_progress(api_res["progress"])
         return
 
@@ -217,7 +240,7 @@ label api_try_login:
         menu:
             "Повторить":
                 jump api_try_login
-            "Играть без сохранения":
+            "Играть без сохранения\n{size=-9}прогресс на сервере не сохранится{/size}":
                 $ api_offline = True
                 return
     else:
@@ -237,6 +260,7 @@ label api_save:
 label api_save_try:
     $ api_res = api_put_progress()
     if api_res["ok"]:
+        $ renpy.notify("Прогресс сохранён")
         return
 
     $ api_err = api_res["error"]
@@ -244,6 +268,31 @@ label api_save_try:
     menu:
         "Повторить":
             jump api_save_try
-        "Играть без сохранения":
+        "Играть без сохранения\n{size=-9}прогресс на сервере не сохранится{/size}":
             $ api_offline = True
             return
+
+
+# ============================================
+# КТО ИГРАЕТ / СМЕНА ИГРОКА
+# ============================================
+
+# Строка «Игрок: ник» и пометка про режим без сохранения.
+screen api_player_info(xp=60, yp=195, name_col="#003366", note_col="#606060"):
+    vbox:
+        xpos xp
+        ypos yp
+        xmaximum 330
+        spacing 4
+        if api_nickname:
+            text "Игрок: [api_nickname!q]" size 26 color name_col
+        if api_offline:
+            text "Режим без сохранения" size 24 color note_col
+
+# Смена игрока: повторный вход, затем как при обычном старте (after_login в script.rpy).
+label api_switch_player:
+    python:
+        while renpy.call_stack_depth() > 0:
+            renpy.pop_call()
+    call api_login_flow
+    jump after_login

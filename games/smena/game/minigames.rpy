@@ -7,11 +7,69 @@
 #   play_deescalate(ключ)  — шкала деэскалации: "relative" (гл. 1), "mother" (гл. 4), "psych" (гл. 5)
 #
 # Итоги мини-игр лежат в переменных mg_*, br_*, ppe_*, deesc_* (см. вызовы в script.rpy).
-# Картинки колец для дыхания: images/br_ring.png, br_core_in.png, br_core_out.png.
+#
+# ОФОРМЛЕНИЕ. Всё сделано в стиле самой игры: размытая фотография отделения под белой
+# вуалью (как окно диалога), белые панели с тёмно-синей рамкой #003366, бумажные бланки
+# цвета #f3efe4 (как «Лист оценки практиканта»), цвета статусов те же, что в дневнике смены.
+# Картинки панелей лежат в game/gui/mg/ (можно заменить своими, размер не важен —
+# они растягиваются как Frame). Кольцо и ядра дыхания: images/br_*.png.
+
+define mg_navy = "#003366"
+define mg_grey = "#707070"
+define mg_ink = "#1f2933"
+define mg_green = "#2e7d4f"
+define mg_amber = "#b26a00"
+define mg_red = "#b3261e"
+define mg_blue = "#2b5fb3"
+define mg_track = "#c9d3de"
 
 default mg_correct = 0
 default mg_red_ok = False
 default mg_pts = 0
+
+
+# --------------------------------------------
+# Общие стили и куски экранов
+# --------------------------------------------
+
+style mg_button is button:
+    background Frame("gui/mg/panel.png", 6, 6)
+    hover_background Frame("gui/mg/panel_navy.png", 6, 6)
+    insensitive_background Frame("gui/mg/panel_ok.png", 6, 6)
+    padding (40, 14, 40, 14)
+
+style mg_button_text is button_text:
+    size 36
+    color mg_navy
+    hover_color "#ffffff"
+    insensitive_color mg_green
+
+# Фон: фото отделения, поверх — светлая вуаль, как у окна диалога.
+screen mg_backdrop(bg="priem"):
+    add bg
+    add Solid("#ffffffc7")
+
+# Заголовок мини-игры в белой панели с синей рамкой.
+screen mg_header(title, hint=""):
+    frame:
+        background Frame("gui/mg/panel.png", 6, 6)
+        xalign 0.5
+        ypos 24
+        xsize 1500
+        padding (30, 14, 30, 16)
+        vbox:
+            spacing 6
+            text title size 44 bold True color mg_navy xalign 0.5
+            if hint:
+                text hint size 27 color mg_grey xalign 0.5 text_align 0.5
+
+# Шкала: value от 0 до 1, w/h — размеры, fill — цвет заливки, yo — сдвиг по вертикали.
+screen mg_meter(value, w=700, h=18, fill="#003366", yo=0):
+    fixed:
+        xysize (w, h)
+        yoffset yo
+        add Solid(mg_track, xsize=w, ysize=h)
+        add Solid(fill, xsize=max(1, int(w * max(0.0, min(1.0, value)))), ysize=h)
 
 
 # ============================================
@@ -32,11 +90,11 @@ init python:
         ("belly", "Девушка, 19 лет",  "Сильная боль в животе, рвота",        "Пульс 104", "yellow"),
     ]
 
-    # (id, заголовок зоны, x, цвет)
+    # (id, заголовок зоны, x, картинка лотка, цвет заголовка)
     TRIAGE_ZONES = [
-        ("red",    "КРАСНЫЙ — сразу",   60,   "#5b1f1f"),
-        ("yellow", "ЖЁЛТЫЙ — скоро",    680,  "#5b4a1a"),
-        ("green",  "ЗЕЛЁНЫЙ — подождёт", 1300, "#1f4d2e"),
+        ("red",    "КРАСНЫЙ — сразу",    60,   "gui/mg/tray_red.png",    "#b3261e"),
+        ("yellow", "ЖЁЛТЫЙ — скоро",     680,  "gui/mg/tray_yellow.png", "#b26a00"),
+        ("green",  "ЗЕЛЁНЫЙ — подождёт", 1300, "gui/mg/tray_green.png",  "#2e7d4f"),
     ]
 
     TRIAGE_ZONE_NAMES = {"red": "красный", "yellow": "жёлтый", "green": "зелёный"}
@@ -72,33 +130,43 @@ init python:
         s.mg_correct = correct
         s.mg_red_ok = red_ok
 
+    def triage_tier():
+        s = renpy.store
+        if s.mg_red_ok and s.mg_correct >= 4:
+            return "good"
+        if s.mg_red_ok and s.mg_correct == 3:
+            return "ok"
+        if s.mg_red_ok:
+            return "weak"
+        return "bad"
+
 
 screen triage_game():
     modal True
     zorder 60
-    add Solid("#0d1218")
+    style_prefix "mg"
 
-    text "Сортировка в приёмном" size 46 color "#ffffff" xalign 0.5 ypos 20
-    text "Перетащите карточки в зоны: красный — сразу, жёлтый — скоро, зелёный — подождёт." size 28 color "#b8c4d0" xalign 0.5 ypos 82
+    use mg_backdrop("priem")
+    use mg_header("Сортировка в приёмном", "Перетащите карточки в зоны: красный — сразу, жёлтый — скоро, зелёный — подождёт.")
 
     timer 0.1 repeat True action Function(triage_tick)
 
-    fixed:
+    hbox:
         xalign 0.5
-        ypos 134
-        xysize (900, 18)
-        add Solid("#2a2f36")
-        add Solid("#e0a030" if triage_time > 8 else "#d9442f", xsize=max(1, int(900 * triage_time / TRIAGE_TIME)), ysize=18)
-
-    text "Распределено: {} из {}".format(len(triage_assign), len(TRIAGE_CARDS)) size 28 color "#ffffff" xpos 60 ypos 150
+        ypos 168
+        spacing 28
+        text "Время" size 28 color mg_navy yoffset 2
+        use mg_meter(triage_time / TRIAGE_TIME, 700, 18, (mg_navy if triage_time > 8 else mg_red), 10)
+        text "Распределено: {} из {}".format(len(triage_assign), len(TRIAGE_CARDS)) size 28 color mg_navy yoffset 2
 
     if len(triage_assign) == len(TRIAGE_CARDS):
         textbutton "Готово":
-            xpos 1600
-            ypos 140
-            text_size 40
-            text_color "#ffffff"
-            text_hover_color "#8fd19e"
+            xpos 1900
+            xanchor 1.0
+            ypos 1074
+            yanchor 1.0
+            padding (40, 8, 40, 8)
+            text_size 32
             action Return("done")
 
     draggroup:
@@ -111,8 +179,8 @@ screen triage_game():
                 ypos 470
                 frame:
                     xysize (560, 560)
-                    background Solid(z[3])
-                    text z[1] size 32 bold True color "#ffffff" xalign 0.5 ypos 14
+                    background Frame(z[3], 6, 6)
+                    text z[1] size 32 bold True color z[4] xalign 0.5 ypos 14
 
         for i, c in enumerate(TRIAGE_CARDS):
             drag:
@@ -121,45 +189,46 @@ screen triage_game():
                 drag_raise True
                 dragged triage_dragged
                 xpos (50 + i * 465)
-                ypos 200
+                ypos 225
                 frame:
                     xysize (440, 170)
-                    background Solid("#e9eef3")
-                    padding (16, 10)
+                    background Frame("gui/mg/paper.png", 6, 6)
+                    padding (18, 12)
                     vbox:
                         spacing 4
-                        text c[1] size 28 bold True color "#1b2a3a"
-                        text c[2] size 23 color "#222222" xsize 408
-                        text c[3] size 26 bold True color "#9b1c1c"
+                        text c[1] size 28 bold True color mg_navy
+                        text c[2] size 23 color mg_ink xsize 404
+                        text c[3] size 26 bold True color mg_red
 
 
 screen triage_summary():
     modal True
     zorder 60
-    add Solid("#0d1218")
+    style_prefix "mg"
 
-    vbox:
+    use mg_backdrop("priem")
+
+    frame:
+        background Frame("gui/mg/paper.png", 6, 6)
         xalign 0.5
-        ypos 110
-        spacing 26
+        yalign 0.5
+        xsize 1180
+        padding (60, 40, 60, 40)
 
-        text "Итог сортировки" size 52 color "#ffffff" xalign 0.5
+        vbox:
+            spacing 22
+            text "ИТОГ СОРТИРОВКИ" size 44 bold True color mg_ink xalign 0.0
+            add Solid("#8a8573", xsize=1060, ysize=2)
 
-        for c in TRIAGE_CARDS:
-            $ got = triage_assign.get(c[0])
-            $ ok = (got == c[4])
-            hbox:
-                spacing 24
-                text ("верно" if ok else "ошибка") size 32 bold True color ("#8fd19e" if ok else "#e57373") min_width 150
-                text "{}: нужен {}, у вас — {}".format(c[1], TRIAGE_ZONE_NAMES[c[4]], TRIAGE_ZONE_NAMES.get(got, "не успели")) size 32 color "#ffffff"
+            for c in TRIAGE_CARDS:
+                $ got = triage_assign.get(c[0])
+                $ ok = (got == c[4])
+                use diary_row("good" if ok else "bad", "{}: нужен {}, у вас — {}".format(c[1], TRIAGE_ZONE_NAMES[c[4]], TRIAGE_ZONE_NAMES.get(got, "не успели")), "")
 
-    textbutton "Продолжить":
-        xalign 0.95
-        yalign 0.95
-        text_size 40
-        text_color "#aaaaaa"
-        text_hover_color "#ffffff"
-        action Return("ok")
+            textbutton "Продолжить":
+                xalign 1.0
+                text_size 34
+                action Return("ok")
 
 
 label play_triage:
@@ -213,59 +282,72 @@ init python:
             s.ppe_errors += 1
             s.ppe_msg = "Нарушен порядок! Контакт с заражённой поверхностью."
 
+    def ppe_tier():
+        e = renpy.store.ppe_errors
+        return "good" if e == 0 else ("ok" if e == 1 else "bad")
+
 
 screen ppe_game():
     modal True
     zorder 60
-    add Solid("#0d1218")
+    style_prefix "mg"
+
+    use mg_backdrop("infection")
 
     if ppe_mode == "don":
-        text "Надевание СИЗ" size 52 color "#ffffff" xalign 0.5 ypos 40
-        text "Выбирайте элементы комплекта в правильном порядке." size 30 color "#b8c4d0" xalign 0.5 ypos 112
+        use mg_header("Надевание СИЗ", "Выбирайте элементы комплекта в правильном порядке.")
     else:
-        text "Снятие СИЗ" size 52 color "#ffffff" xalign 0.5 ypos 40
-        text "Снимите комплект правильно. Любая ошибка — контакт с заражённой стороной." size 30 color "#b8c4d0" xalign 0.5 ypos 112
+        use mg_header("Снятие СИЗ", "Снимите комплект правильно. Любая ошибка — контакт с заражённой стороной.")
 
     hbox:
         xalign 0.5
-        ypos 240
-        spacing 180
+        ypos 230
+        spacing 120
 
+        # левая колонка — комплект
         vbox:
             spacing 20
-            text "Комплект" size 36 color "#ffffff"
+            text "Комплект" size 36 bold True color mg_navy
             for name in ppe_tray:
                 if name in ppe_done:
-                    textbutton name:
+                    textbutton ("✓  " + name):
                         sensitive False
-                        xminimum 480
-                        padding (30, 14)
-                        background Solid("#1f4d2e")
-                        text_size 38
-                        text_color "#8fd19e"
-                        text_insensitive_color "#8fd19e"
+                        xminimum 520
                         action NullAction()
                 else:
                     textbutton name:
-                        xminimum 480
-                        padding (30, 14)
-                        background Solid("#2d3a4a")
-                        hover_background Solid("#3f5873")
-                        text_size 38
-                        text_color "#ffffff"
+                        xminimum 520
                         action Function(ppe_pick, name)
 
-        vbox:
-            spacing 20
-            text ("Порядок надевания" if ppe_mode == "don" else "Порядок снятия") size 36 color "#ffffff"
-            for i in range(len(ppe_order)):
-                if i < len(ppe_done):
-                    text "{}. {}".format(i + 1, ppe_done[i]) size 38 color "#8fd19e"
-                else:
-                    text "{}. —".format(i + 1) size 38 color "#5d6b7a"
+        # правая колонка — бланк с порядком действий
+        frame:
+            background Frame("gui/mg/paper.png", 6, 6)
+            xsize 640
+            padding (40, 28, 40, 34)
+            vbox:
+                spacing 18
+                text ("ПОРЯДОК НАДЕВАНИЯ" if ppe_mode == "don" else "ПОРЯДОК СНЯТИЯ") size 30 bold True color mg_ink
+                add Solid("#8a8573", xsize=560, ysize=2)
+                for i in range(len(ppe_order)):
+                    if i < len(ppe_done):
+                        text "{}.  {}".format(i + 1, ppe_done[i]) size 36 color mg_green
+                    else:
+                        text "{}.  ______________".format(i + 1) size 36 color "#9a9484"
 
-    text "[ppe_msg]" size 38 color "#e57373" xalign 0.5 ypos 790
-    text "Нарушений: [ppe_errors]" size 32 color ("#ffffff" if ppe_errors == 0 else "#e57373") xalign 0.5 ypos 860
+    if ppe_msg:
+        frame:
+            background Frame("gui/mg/panel_err.png", 6, 6)
+            xalign 0.5
+            ypos 780
+            padding (36, 14, 36, 14)
+            text "[ppe_msg]" size 34 color mg_red
+
+    frame:
+        background Frame("gui/mg/panel.png", 6, 6)
+        xalign 0.5
+        ypos 900
+        padding (34, 10, 34, 12)
+        text "Нарушений: [ppe_errors]" size 32 color (mg_navy if ppe_errors == 0 else mg_red)
 
 
 label play_ppe(mode):
@@ -293,7 +375,7 @@ default br_tension = 0.0
 default br_zoom = 1.0
 default br_label = "Вдох"
 default br_fb = ""
-default br_fb_color = "#ffffff"
+default br_fb_color = "#003366"
 default br_last_click = -10.0
 default br_score = 0
 
@@ -321,7 +403,7 @@ init python:
         s.br_zoom = 1.0
         s.br_label = "Вдох"
         s.br_fb = ""
-        s.br_fb_color = "#ffffff"
+        s.br_fb_color = "#003366"
         s.br_last_click = -10.0
         s.br_score = 0
 
@@ -330,11 +412,11 @@ init python:
         if hit:
             s.br_hits += 1
             s.br_fb = quality or "Ровно"
-            s.br_fb_color = "#8fd19e"
+            s.br_fb_color = "#2e7d4f"
             s.br_tension = max(0.0, s.br_tension - 0.5)
         else:
             s.br_fb = "Ритм сбился"
-            s.br_fb_color = "#e57373"
+            s.br_fb_color = "#b3261e"
             s.br_tension = min(3.0, s.br_tension + 1.0)
         s.br_i += 1
         if s.br_i >= BR_BEATS:
@@ -373,27 +455,32 @@ init python:
             s.br_early += 1
             s.br_tension = min(3.0, s.br_tension + 0.5)
             s.br_fb = "Рано"
-            s.br_fb_color = "#e0a030"
+            s.br_fb_color = "#b26a00"
         return None
+
+    def br_tier():
+        sc = renpy.store.br_score
+        return "good" if sc >= 6 else ("ok" if sc >= 4 else "bad")
 
 
 screen breathing_game():
     modal True
     zorder 60
-    add Solid("#0b1620")
+    style_prefix "mg"
+
+    use mg_backdrop("psych")
+    use mg_header("Дышите вместе с пациенткой", "Нажмите (клик, пробел или касание), когда кольцо совпадёт с кругом.")
 
     timer 0.03 repeat True action Function(br_tick)
 
     button:
         xysize (config.screen_width, config.screen_height)
         background None
+        hover_background None
         action Function(br_click)
     key "K_SPACE" action Function(br_click)
 
-    text "Дышите вместе с пациенткой" size 46 color "#ffffff" xalign 0.5 ypos 40
-    text "Нажмите (клик, пробел или касание), когда кольцо совпадёт с кругом." size 28 color "#b8c4d0" xalign 0.5 ypos 104
-
-    text "[br_label]" size 90 bold True xalign 0.5 ypos 170 color ("#6fb7e8" if br_label == "Вдох" else "#8fd19e")
+    text "[br_label]" size 80 bold True xalign 0.5 ypos 190 color (mg_blue if br_label == "Вдох" else mg_green)
 
     if br_label == "Вдох":
         add "images/br_core_in.png" align (0.5, 0.58)
@@ -401,23 +488,24 @@ screen breathing_game():
         add "images/br_core_out.png" align (0.5, 0.58)
     add "images/br_ring.png" align (0.5, 0.58) zoom br_zoom
 
-    text "[br_fb]" size 44 color br_fb_color xalign 0.5 ypos 930
+    text "[br_fb]" size 44 bold True color br_fb_color xalign 0.5 ypos 925
 
-    hbox:
+    frame:
+        background Frame("gui/mg/panel.png", 6, 6)
         xpos 60
-        ypos 960
-        spacing 30
-        text "Попаданий: [br_hits] из [BR_BEATS]" size 32 color "#ffffff"
-    hbox:
+        ypos 940
+        padding (30, 10, 30, 12)
+        text "Попаданий: [br_hits] из [BR_BEATS]" size 30 color mg_navy
+
+    frame:
+        background Frame("gui/mg/panel.png", 6, 6)
         xalign 0.97
-        ypos 960
-        spacing 20
-        text "Напряжение" size 32 color "#ffffff"
-        fixed:
-            xysize (300, 22)
-            yoffset 12
-            add Solid("#2a2f36")
-            add Solid("#d9442f", xsize=max(1, int(300 * br_tension / 3.0)), ysize=22)
+        ypos 940
+        padding (30, 10, 30, 12)
+        hbox:
+            spacing 20
+            text "Напряжение" size 30 color mg_navy
+            use mg_meter(br_tension / 3.0, 300, 20, mg_red, 10)
 
 
 label play_breathing:
@@ -575,40 +663,47 @@ init python:
         return -1
 
 
+# Шкала напряжения собеседника: белая панель с синей рамкой над сценой.
+# Зоны окрашены теми же цветами, что и отметки в «Листе оценки практиканта».
 screen deesc_bar():
     zorder 55
 
-    $ bw = 760
+    $ bw = 820
     $ t = max(0, min(100, deesc_tension))
+    $ zone_w = int(bw * 0.35)
+    $ zone_col = mg_green if t <= 35 else (mg_amber if t <= 70 else mg_red)
+    $ zone_txt = "Безопасная зона" if t <= 35 else ("Накаляется" if t <= 70 else "Опасно")
 
-    vbox:
+    frame:
+        background Frame("gui/mg/panel.png", 6, 6)
         xalign 0.5
-        ypos 30
-        spacing 8
+        ypos 24
+        padding (36, 16, 36, 18)
 
-        text "[deesc_title]" size 32 color "#ffffff" xalign 0.5 outlines [(2, "#000000", 0, 0)]
+        vbox:
+            spacing 12
 
-        fixed:
-            xysize (bw, 30)
-            xalign 0.5
-            add Solid("#2e8b57", xsize=int(bw * 0.35), ysize=30)
-            add Solid("#d4a017", xsize=int(bw * 0.35), ysize=30) xpos int(bw * 0.35)
-            add Solid("#b03a2e", xsize=bw - int(bw * 0.70), ysize=30) xpos int(bw * 0.70)
-            add Solid("#ffffff", xsize=6, ysize=46) xpos (int(bw * t / 100.0) - 3) ypos -8
+            fixed:
+                xysize (bw, 40)
+                text "[deesc_title]" size 30 bold True color mg_navy yalign 0.5
+                hbox:
+                    xalign 1.0
+                    yalign 0.5
+                    spacing 22
+                    if deesc_last < 0:
+                        text "[deesc_last]" size 30 bold True color mg_green
+                    elif deesc_last > 0:
+                        text "+[deesc_last]" size 30 bold True color mg_red
+                    text "[zone_txt]" size 30 bold True color zone_col
 
-        hbox:
-            xalign 0.5
-            spacing 20
-            if t <= 35:
-                text "Безопасная зона" size 28 color "#8fd19e" outlines [(2, "#000000", 0, 0)]
-            elif t <= 70:
-                text "Накаляется" size 28 color "#f0c040" outlines [(2, "#000000", 0, 0)]
-            else:
-                text "Опасно" size 28 color "#ff7b6b" outlines [(2, "#000000", 0, 0)]
-            if deesc_last < 0:
-                text "[deesc_last]" size 28 color "#8fd19e" outlines [(2, "#000000", 0, 0)]
-            elif deesc_last > 0:
-                text "+[deesc_last]" size 28 color "#ff7b6b" outlines [(2, "#000000", 0, 0)]
+            fixed:
+                xysize (bw, 38)
+                add Solid(mg_green, xsize=zone_w - 2, ysize=22) ypos 8
+                add Solid(mg_amber, xsize=zone_w - 2, ysize=22) pos (zone_w, 8)
+                add Solid(mg_red, xsize=bw - 2 * zone_w, ysize=22) pos (2 * zone_w, 8)
+                # ползунок: белая подложка, поверх — синий штрих
+                add Solid("#ffffff", xsize=12, ysize=38) xpos (int(bw * t / 100.0) - 6)
+                add Solid(mg_navy, xsize=6, ysize=38) xpos (int(bw * t / 100.0) - 3)
 
 
 label play_deescalate(key):
