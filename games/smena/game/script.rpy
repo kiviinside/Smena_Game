@@ -27,6 +27,10 @@ default psych_attitude = 0
 
 default ending = ""
 
+# Отключаем анимацию появления/скрытия окна диалога (в веб-версии из-за неё была ошибка)
+define config.window_show_transition = None
+define config.window_hide_transition = None
+
 # Проверяем, проходил ли игрок игру хотя бы раз
 default persistent.game_started = False
 default persistent.unlocked_chapters = 1      # сколько глав открыто
@@ -126,14 +130,16 @@ label start_game:
 
 # Игра начинается здесь:
 label start:
-    $ player_name = renpy.input("Введите ваш никнейм:", length=20).strip()
-    if player_name == "":
-        $ player_name = "Медбрат"
+    $ _window_auto = False
+
+    # Вход через сервер (api.rpy). Пустой ник не подменяем общим значением.
+    call api_login_flow
 
     # Если игрок заходит в первый раз — принудительно начинаем с начала
     if not persistent.game_started:
         $ persistent.game_started = True
         $ persistent.unlocked_chapters = 1
+        call api_save
         jump start_game
 
     # Если уже играл раньше — показываем меню выбора
@@ -146,6 +152,9 @@ label start:
 
 label block1:
     call chapter_intro(1, "Приёмное отделение")
+    # Новое прохождение главы: обнуляем баллы и отношение (иначе сложатся с восстановленными с сервера)
+    $ priem_score = 0
+    $ priem_attitude = 0
 
     scene priem
     with fade
@@ -301,6 +310,7 @@ label block1:
     "Первый день ротации закончен."
 
     $ persistent.unlocked_chapters = max(persistent.unlocked_chapters, 2)
+    call api_save
     jump block2
 
 
@@ -310,6 +320,9 @@ label block1:
 
 label block2:
     call chapter_intro(2, "Терапевтическое отделение")
+    # Новое прохождение главы: обнуляем баллы и отношение (иначе сложатся с восстановленными с сервера)
+    $ therapy_score = 0
+    $ therapy_attitude = 0
 
     scene therapy
     with fade
@@ -496,6 +509,7 @@ label block2:
     "Второй день ротации закончен."
 
     $ persistent.unlocked_chapters = max(persistent.unlocked_chapters, 3)
+    call api_save
     jump block3
 
 
@@ -505,6 +519,9 @@ label block2:
 
 label block3:
     call chapter_intro(3, "Педиатрическое отделение")
+    # Новое прохождение главы: обнуляем баллы и отношение (иначе сложатся с восстановленными с сервера)
+    $ pediatrics_score = 0
+    $ pediatrics_attitude = 0
 
     scene pediatrics
     with fade
@@ -674,6 +691,7 @@ label block3:
     "Третий день ротации закончен."
 
     $ persistent.unlocked_chapters = max(persistent.unlocked_chapters, 4)
+    call api_save
     jump block4
 
 
@@ -683,6 +701,9 @@ label block3:
 
 label block4:
     call chapter_intro(4, "Инфекционное отделение")
+    # Новое прохождение главы: обнуляем баллы и отношение (иначе сложатся с восстановленными с сервера)
+    $ infection_score = 0
+    $ infection_attitude = 0
 
     scene infection
     with fade
@@ -836,6 +857,7 @@ label block4:
     "Четвёртый день ротации закончен."
 
     $ persistent.unlocked_chapters = max(persistent.unlocked_chapters, 5)
+    call api_save
     jump block5
 
 
@@ -845,6 +867,9 @@ label block4:
 
 label block5:
     call chapter_intro(5, "Психиатрическое отделение")
+    # Новое прохождение главы: обнуляем баллы и отношение (иначе сложатся с восстановленными с сервера)
+    $ psych_score = 0
+    $ psych_attitude = 0
 
     scene psych
     with fade
@@ -895,7 +920,7 @@ label block5:
 
     "Словно что-то тяжёлое ударилось о стену."
 
-    $ renpy.pause(1.0)
+    pause 1.0
 
     "Вы останавливаетесь."
 
@@ -943,13 +968,13 @@ label block5:
 
     "Коридор кажется длиннее, чем раньше."
 
-    $ renpy.pause(1.2)
+    pause 1.2
 
     "Вдруг откуда-то слева раздаётся пронзительный женский крик."
 
     "АААААААААААААА!!!" with hpunch
 
-    $ renpy.pause(0.8)
+    pause 0.8
 
     "Крик обрывается так же внезапно, как начался."
 
@@ -1016,7 +1041,7 @@ label block5:
 
     "В коридоре внезапно гаснет свет."
 
-    $ renpy.pause(1.0)
+    pause 1.0
 
     "На несколько секунд становится абсолютно темно."
 
@@ -1026,7 +1051,7 @@ label block5:
 
     "Слишком неподвижно."
 
-    $ renpy.pause(0.8)
+    pause 0.8
 
     "Вы моргаете — и человека уже нет."
 
@@ -1060,6 +1085,8 @@ label block5:
         "В психиатрии — здесь нужна настоящая устойчивость":
             $ ending = "psych"
 
+    call api_save
+
     scene black
     with fade
 
@@ -1083,4 +1110,4 @@ label block5:
 
     "Конец."
 
-    return
+    $ renpy.full_restart()
