@@ -1,0 +1,23 @@
+server:
+  port: ${PORT:8080}
+  compression:
+    enabled: true
+    mime-types: text/html,text/css,application/javascript,text/javascript,application/json,application/wasm
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/smena}
+    username: ${DB_USER:smena}
+    password: ${DB_PASSWORD:change_me}
+  flyway:
+    enabled: true
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          max-age: 5m
+
+app:
+  # Если веб-сборка игры лежит в static/ этого же сервиса, CORS не нужен.
+  # Если игра раздаётся с другого домена - перечислите его через запятую.
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:}
