@@ -24,28 +24,15 @@ default api_offline = False
 init python:
     import json
 
-    # ВАЖНО: имена JSON-полей сверить с FRONTEND_HANDOFF.md.
-    # (ключ на сервере, где хранится, имя переменной, значение по умолчанию)
-    API_PROGRESS_FIELDS = [
-        ("unlockedChapters", "persistent", "unlocked_chapters", 1),
-        ("gameStarted",      "persistent", "game_started",      False),
-        ("ending",           "store",      "ending",            ""),
-        ("priemScore",       "store",      "priem_score",       0),
-        ("priemAttitude",    "store",      "priem_attitude",    0),
-        ("therapyScore",     "store",      "therapy_score",     0),
-        ("therapyAttitude",  "store",      "therapy_attitude",  0),
-        ("pediatricsScore",  "store",      "pediatrics_score",  0),
-        ("pediatricsAttitude", "store",    "pediatrics_attitude", 0),
-        ("infectionScore",   "store",      "infection_score",   0),
-        ("infectionAttitude", "store",     "infection_attitude", 0),
-        ("psychScore",       "store",      "psych_score",       0),
-        ("psychAttitude",    "store",      "psych_attitude",    0),
+    # Переменные хранилища (store), которые сервер держит в progress.state.
+    # Имена ключей на сервере совпадают с именами переменных (snake_case).
+    API_STATE_VARS = [
+        "priem_score", "priem_attitude", "therapy_score", "therapy_attitude",
+        "pediatrics_score", "pediatrics_attitude", "infection_score",
+        "infection_attitude", "psych_score", "psych_attitude",
     ]
 
     _api_counter = [0]
-
-    def _api_target(kind):
-        return persistent if kind == "persistent" else renpy.store
 
     def _api_coerce(value, default):
         if value is None:
@@ -63,14 +50,28 @@ init python:
         # Серверные значения перезаписывают локальные. Если поле не пришло,
         # ставим значение по умолчанию, а не оставляем чужое локальное.
         progress = progress if isinstance(progress, dict) else {}
-        for key, kind, name, default in API_PROGRESS_FIELDS:
-            setattr(_api_target(kind), name, _api_coerce(progress.get(key), default))
+        state = progress.get("state")
+        state = state if isinstance(state, dict) else {}
+        persistent.unlocked_chapters = _api_coerce(progress.get("unlockedChapters"), 1)
+        persistent.game_started = _api_coerce(progress.get("gameStarted"), False)
+        renpy.store.ending = _api_coerce(progress.get("ending"), "")
+        for name in API_STATE_VARS:
+            setattr(renpy.store, name, _api_coerce(state.get(name), 0))
 
     def api_progress_payload():
-        payload = {"nickname": renpy.store.api_nickname}
-        for key, kind, name, default in API_PROGRESS_FIELDS:
-            payload[key] = getattr(_api_target(kind), name, default)
-        return payload
+        state = {}
+        for name in API_STATE_VARS:
+            state[name] = int(getattr(renpy.store, name, 0) or 0)
+        return {
+            "nickname": renpy.store.api_nickname,
+            "progress": {
+                "gameStarted": bool(getattr(persistent, "game_started", False)),
+                # сервер принимает значения от 1 до 5
+                "unlockedChapters": max(1, int(getattr(persistent, "unlocked_chapters", 1) or 1)),
+                "ending": getattr(renpy.store, "ending", "") or "",
+                "state": state,
+            },
+        }
 
     def _api_url(path):
         base = renpy.store.api_base_url
