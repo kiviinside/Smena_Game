@@ -163,7 +163,7 @@ screen triage_game():
         textbutton "Готово":
             xpos 1900
             xanchor 1.0
-            ypos 1074
+            ypos 1066
             yanchor 1.0
             padding (40, 8, 40, 8)
             text_size 32
@@ -178,7 +178,7 @@ screen triage_game():
                 xpos z[2]
                 ypos 470
                 frame:
-                    xysize (560, 560)
+                    xysize (560, 500)
                     background Frame(z[3], 6, 6)
                     text z[1] size 32 bold True color z[4] xalign 0.5 ypos 14
 
