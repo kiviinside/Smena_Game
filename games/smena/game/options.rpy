@@ -207,12 +207,3 @@ init python:
 
 ## Имя пользователя и название проекта, ассоциированные с проектом на itch.io,
 ## разделённые дробью.
-
-# define build.itch_project = "renpytom/test-project"
-
-define config.screen_width = 1920
-define config.screen_height = 1080
-define config.adjust_view_size = True
-
-define config.gl2 = False
-define config.gl_enable = False
