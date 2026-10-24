@@ -6,9 +6,9 @@ server:
 
 spring:
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/smena}
-    username: ${DB_USER:smena}
-    password: ${DB_PASSWORD:change_me}
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
   flyway:
     enabled: true
   web:
