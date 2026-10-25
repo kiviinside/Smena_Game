@@ -207,6 +207,10 @@ style input:
 screen choice(items):
     style_prefix "choice"
 
+    # Пока показаны варианты, фон размывается (см. choice_blur_on в mechanics.rpy).
+    on "show" action Function(choice_blur_on)
+    on "hide" action Function(choice_blur_off)
+
     vbox:
         for i in items:
             textbutton i.caption action [SetVariable("timed_seconds", 0), i.action]

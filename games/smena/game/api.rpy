@@ -55,15 +55,34 @@ init python:
         except (TypeError, ValueError):
             return default
 
+    def _api_pick(d, *names):
+        # Берёт первое найденное поле (на случай camelCase / snake_case).
+        if isinstance(d, dict):
+            for n in names:
+                if n in d:
+                    return d[n]
+        return None
+
+    def api_progress_info(progress):
+        # Разбирает прогресс с сервера: (игра начата, открыто глав, концовка, state).
+        progress = progress if isinstance(progress, dict) else {}
+        state = _api_pick(progress, "state")
+        state = state if isinstance(state, dict) else {}
+        unlocked = _api_coerce(_api_pick(progress, "unlockedChapters", "unlocked_chapters"), 1)
+        unlocked = max(1, min(5, unlocked))
+        started = _api_coerce(_api_pick(progress, "gameStarted", "game_started"), False)
+        ending = _api_coerce(_api_pick(progress, "ending"), "")
+        # Открыта вторая глава или есть концовка, значит игра точно уже начата.
+        started = bool(started or unlocked > 1 or ending)
+        return started, unlocked, ending, state
+
     def api_apply_progress(progress):
         # Серверные значения перезаписывают локальные. Если поле не пришло,
         # ставим значение по умолчанию, а не оставляем чужое локальное.
-        progress = progress if isinstance(progress, dict) else {}
-        state = progress.get("state")
-        state = state if isinstance(state, dict) else {}
-        persistent.unlocked_chapters = _api_coerce(progress.get("unlockedChapters"), 1)
-        persistent.game_started = _api_coerce(progress.get("gameStarted"), False)
-        renpy.store.ending = _api_coerce(progress.get("ending"), "")
+        started, unlocked, ending, state = api_progress_info(progress)
+        persistent.unlocked_chapters = unlocked
+        persistent.game_started = started
+        renpy.store.ending = ending
         for name in API_STATE_VARS:
             setattr(renpy.store, name, _api_coerce(state.get(name), 0))
 
@@ -180,9 +199,17 @@ init python:
         res = api_request("POST", "/api/login", {"nickname": nickname})
         if res["ok"]:
             d = res["data"]
-            res["progress"] = d["progress"] if isinstance(d.get("progress"), dict) else d
+            prog = d["progress"] if isinstance(d.get("progress"), dict) else d
+            res["progress"] = prog
             res["nickname"] = d["nickname"] if isinstance(d.get("nickname"), str) and d["nickname"] else nickname
-            res["is_new"] = bool(d.get("isNew"))
+            res["is_new"] = bool(_api_pick(d, "isNew", "is_new", "new"))
+            started, unlocked, ending, state = api_progress_info(prog)
+            # Есть ли у профиля сохранённый прогресс (только тогда спрашиваем «Это вы?»).
+            res["returning"] = started
+            res["chapters"] = unlocked
+            # Нашёл ли клиент в ответе поле с числом глав (для диагностики).
+            res["shape_ok"] = _api_pick(prog, "unlockedChapters", "unlocked_chapters") is not None
+            res["keys"] = ", ".join(sorted(list(d.keys()) + ["progress." + str(k) for k in prog.keys()]))[:200]
         return res
 
     def api_put_progress():
@@ -221,15 +248,19 @@ label api_try_login:
     $ api_res = api_login(api_input)
     if api_res["ok"]:
         $ api_found = api_res["nickname"]
-        if api_res["is_new"]:
-            "Профиль «[api_found!q]» создан. Прогресс будет сохраняться на сервере."
-        else:
+        $ api_chapters = api_res["chapters"]
+        $ api_keys = api_res["keys"]
+        if not api_res["shape_ok"]:
+            "Сервер ответил в неожиданном формате, прогресс может не загрузиться.\nПоля ответа: [api_keys!q]"
+        if api_res["returning"]:
             menu:
-                "Профиль «[api_found!q]» уже есть. Это вы?"
+                "Профиль «[api_found!q]» уже есть (открыто глав: [api_chapters]). Это вы?"
                 "Да, продолжить":
                     pass
                 "Нет, ввести другой ник":
                     jump api_ask_nickname
+        elif api_res["is_new"]:
+            "Профиль «[api_found!q]» создан. Прогресс будет сохраняться на сервере."
         $ api_nickname = api_found
         $ api_apply_progress(api_res["progress"])
         return

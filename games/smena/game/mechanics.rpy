@@ -55,6 +55,12 @@ transform tension_high:
         repeat
 
 
+# Размытие фона, пока на экране варианты ответа (включается экраном choice).
+transform choice_blur_in:
+    blur 0.0
+    easein 0.25 blur 9.0
+
+
 init python:
 
     def clamp100(v):
@@ -99,6 +105,25 @@ init python:
     def reset_look():
         renpy.store.look_level = 0
         renpy.show_layer_at([], layer="master")
+
+    def _look_list():
+        # Эффекты напряжения, подходящие текущему уровню (без размытия).
+        st = renpy.store
+        if st.look_level == 3:
+            return [st.tension_high]
+        if st.look_level == 2:
+            return [st.tension_mid]
+        if st.look_level == 1:
+            return [st.tension_low]
+        return []
+
+    def choice_blur_on():
+        # Размываем фон и спрайты (слой master); окно диалога и варианты остаются чёткими.
+        renpy.show_layer_at(_look_list() + [renpy.store.choice_blur_in], layer="master")
+
+    def choice_blur_off():
+        # Возвращаем картинку как была (с учётом напряжения).
+        renpy.show_layer_at(_look_list(), layer="master")
 
     def note(ch, level, what, why="", trust=0, confidence=0, fatigue=0, tension=0, flag=None):
         # Запись в дневник смены + изменение параметров + флаг.
