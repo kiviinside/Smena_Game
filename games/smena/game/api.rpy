@@ -20,6 +20,9 @@ define api_timeout = 30.0
 default api_nickname = ""
 default api_offline = False
 
+# Временная отладка входа: показывает, что вернул сервер. Для релиза поставьте False.
+define api_debug = True
+
 
 init python:
     import json
@@ -109,21 +112,23 @@ init python:
 
     def _api_fetch_web(method, url, payload):
         import emscripten
+        import base64
 
         _api_counter[0] += 1
         rid = _api_counter[0]
 
+        # Текст ответа передаём в Python через base64: без двойного экранирования JSON.
         js = (
             "window.__smenaApi = window.__smenaApi || {};"
             "(function(id){"
-            "var s = window.__smenaApi[id] = {done:false, status:0, text:''};"
+            "var s = window.__smenaApi[id] = {done:false, status:0, b64:''};"
             "var o = {method:" + json.dumps(method) + ", headers:{'Content-Type':'application/json'}};"
             "var b = " + json.dumps(payload) + ";"
             "if (b !== null) { o.body = b; }"
             "fetch(" + json.dumps(url) + ", o)"
             ".then(function(r){ s.status = r.status; return r.text(); })"
-            ".then(function(t){ s.text = t; s.done = true; })"
-            ".catch(function(e){ s.status = 0; s.text = String(e); s.done = true; });"
+            ".then(function(t){ s.b64 = btoa(unescape(encodeURIComponent(t))); s.done = true; })"
+            ".catch(function(e){ s.status = 0; s.b64 = btoa(unescape(encodeURIComponent(String(e)))); s.done = true; });"
             "})(" + str(rid) + ");"
         )
         emscripten.run_script(js)
@@ -140,13 +145,16 @@ init python:
         if not finished:
             return 0, "", "Сервер не отвечает"
 
-        raw = emscripten.run_script_string("JSON.stringify(window.__smenaApi[%d])" % rid)
+        status = emscripten.run_script_int("window.__smenaApi[%d].status" % rid)
+        b64 = emscripten.run_script_string("window.__smenaApi[%d].b64" % rid)
         emscripten.run_script("delete window.__smenaApi[%d];" % rid)
         try:
-            result = json.loads(raw)
-        except ValueError:
+            text = base64.b64decode(b64).decode("utf-8")
+        except Exception:
             return 0, "", "Некорректный ответ браузера"
-        return int(result.get("status", 0)), result.get("text", ""), ""
+        if status == 0:
+            return 0, "", text
+        return status, text, ""
 
     def _api_fetch_desktop(method, url, payload):
         import urllib.request
@@ -246,6 +254,10 @@ label api_ask_nickname:
 
 label api_try_login:
     $ api_res = api_login(api_input)
+    if api_debug:
+        # Временная отладка: что реально дошло до Python. После проверки поставьте api_debug = False.
+        $ api_dbg = "status=%s ok=%s new=%s returning=%s keys=%s" % (api_res["status"], api_res["ok"], api_res.get("is_new"), api_res.get("returning"), api_res.get("keys"))
+        "[api_dbg!q]"
     if api_res["ok"]:
         $ api_found = api_res["nickname"]
         $ api_chapters = api_res["chapters"]
