@@ -19,6 +19,7 @@ define api_timeout = 30.0
 
 default api_nickname = ""
 default api_offline = False
+default api_raw_dbg = ""
 
 # Временная отладка входа: показывает, что вернул сервер. Для релиза поставьте False.
 define api_debug = True
@@ -185,6 +186,9 @@ init python:
         finally:
             renpy.hide_screen("api_busy")
 
+        # Временная диагностика: что реально получил Python (префикс v2 = новый код).
+        renpy.store.api_raw_dbg = ("v2 st=%s len=%s net=%s head=%s" % (status, len(text), net_error, text[:70])).replace("[", "(").replace("]", ")")
+
         data = {}
         if text:
             try:
@@ -258,6 +262,7 @@ label api_try_login:
         # Временная отладка: что реально дошло до Python. После проверки поставьте api_debug = False.
         $ api_dbg = "status=%s ok=%s new=%s returning=%s keys=%s" % (api_res["status"], api_res["ok"], api_res.get("is_new"), api_res.get("returning"), api_res.get("keys"))
         "[api_dbg!q]"
+        "[api_raw_dbg!q]"
     if api_res["ok"]:
         $ api_found = api_res["nickname"]
         $ api_chapters = api_res["chapters"]
